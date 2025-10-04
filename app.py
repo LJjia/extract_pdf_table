@@ -9,7 +9,7 @@ client = OpenAI(
     base_url="https://api.hunyuan.cloud.tencent.com/v1",  # 混元 endpoint
     )
 
-st.title("📄 PDF 文献智能助手")
+st.title("📄循证医学智能体-常州南京大学高新技术研究院V2")
 
 uploaded_file = st.file_uploader("上传 PDF", type="pdf")
 question = st.text_input("输入你的问题，例如：提取临床数据中的表格信息")
@@ -21,6 +21,7 @@ if uploaded_file and question:
         tmp_file.write(uploaded_file.getvalue())
         tmp_path = tmp_file.name
     tables = camelot.read_pdf(tmp_path, flavor='stream', pages='all')
+    print(f"read table num {len(tables)}")
     # 将所有表格数据转换为文本格式，供LLM使用
     tables_text = ""
     for i, table in enumerate(tables):
@@ -37,7 +38,7 @@ if uploaded_file and question:
     {question}，参考以下文献：
     {tables_text}
     """
-    # print("start LLM chat!")
+    print(f"token len {len(prompt)}")
     # 新的API调用方式
     resp = client.chat.completions.create(
         model="hunyuan-turbos-latest",
