@@ -9,7 +9,7 @@ client = OpenAI(
     base_url="https://api.hunyuan.cloud.tencent.com/v1",  # 混元 endpoint
     )
 
-st.title("📄循证医学智能体-常州南京大学高新技术研究院V2")
+st.title("📄循证医学智能体V2")
 
 uploaded_file = st.file_uploader("上传 PDF", type="pdf")
 question = st.text_input("输入你的问题，例如：提取临床数据中的表格信息")
@@ -45,4 +45,5 @@ if uploaded_file and question:
         messages=[{"role":"user", "content": prompt}]
     )
     st.subheader("📊 答案：")
+
     st.write(resp.choices[0].message.content)
