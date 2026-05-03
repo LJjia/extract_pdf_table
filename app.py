@@ -24,6 +24,8 @@ model_option = st.sidebar.selectbox(
     [
         "hunyuan-free",
         "hunyuan-v1",
+        "deepseek-chat",
+        "deepseek-reasoner",
         "gpt-4o-mini",
         "gpt-4o",
     ]
@@ -33,6 +35,7 @@ base_url_option = st.sidebar.selectbox(
     "选择接口",
     [
         "https://api.hunyuan.cloud.tencent.com/v1",
+        "https://api.deepseek.com",
         "https://api.openai.com/v1"
     ]
 )
@@ -91,11 +94,13 @@ def build_prompt(question, tables_text):
 
 
 def call_llm(api_key, base_url, model, prompt):
-    if model == 'hunyuan-test':
+    if model == 'hunyuan-free':
         api_key = 'sk-xT4H5qIik5ua5jAFMVwSB06vnGT6RzmXxJK8eFP9EDzw13L2'
         base_url="https://api.hunyuan.cloud.tencent.com/v1"
+        model = "hunyuan-turbos-latest"
     client = OpenAI(api_key=api_key, base_url=base_url)
 
+    print("")
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -107,9 +112,9 @@ def call_llm(api_key, base_url, model, prompt):
 
 # ========== 主逻辑 ==========
 if uploaded_file and question:
-    if not api_key:
-        st.warning("⚠️ 请先输入 API Key")
-        st.stop()
+    # if not api_key:
+        # st.warning("⚠️ 请先输入 API Key")
+        # st.stop()
 
     with st.spinner("🔍 正在解析表格 + 调用大模型..."):
         try:
@@ -129,8 +134,8 @@ if uploaded_file and question:
             with st.expander("📄 查看提取的表格"):
                 st.markdown(tables_text)
 
-            with st.expander("🧠 Prompt（调试用）"):
-                st.code(prompt)
+            # with st.expander("🧠 Prompt（调试用）"):
+            #     st.code(prompt)
 
         except Exception as e:
             st.error(f"❌ 出错了: {e}")
