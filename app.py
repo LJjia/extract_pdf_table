@@ -1,49 +1,136 @@
 import streamlit as st
 import tempfile
-from openai import OpenAI
 import camelot
+from openai import OpenAI
 
-# 这里填入你自己的 OpenAI API key
-client = OpenAI(
-    api_key='sk-xT4H5qIik5ua5jAFMVwSB06vnGT6RzmXxJK8eFP9EDzw13L2',
-    base_url="https://api.hunyuan.cloud.tencent.com/v1",  # 混元 endpoint
-    )
+# ========== 页面配置 ==========
+st.set_page_config(page_title="循证医学智能体 V2", layout="wide")
+st.markdown("<br><br>", unsafe_allow_html=True)
 
-st.title("📄循证医学智能体V2")
+st.markdown(
+    "<h1 style='text-align: center;'>循证医学智能体 V2</h1>",
+    unsafe_allow_html=True
+)
 
-uploaded_file = st.file_uploader("上传 PDF", type="pdf")
-question = st.text_input("输入你的问题，例如：提取临床数据中的表格信息")
+st.markdown("<br>", unsafe_allow_html=True)
 
-if uploaded_file and question:
-    # 尝试提取所有表格，使用 lattice 模式（适合有框线的表格，常见于论文）
-    # 使用临时文件
+# ========== Sidebar ==========
+st.sidebar.header("⚙️ 配置")
+
+api_key = st.sidebar.text_input("输入 API Key", type="password")
+
+model_option = st.sidebar.selectbox(
+    "选择大模型",
+    [
+        "hunyuan-free",
+        "hunyuan-v1",
+        "gpt-4o-mini",
+        "gpt-4o",
+    ]
+)
+
+base_url_option = st.sidebar.selectbox(
+    "选择接口",
+    [
+        "https://api.hunyuan.cloud.tencent.com/v1",
+        "https://api.openai.com/v1"
+    ]
+)
+
+# ========== 主界面 ==========
+st.markdown("### 📄 文献上传")
+
+uploaded_file = st.file_uploader(
+    "上传医学PDF（支持表格内容分析、表格提取）",
+    type="pdf",
+    help="建议上传带表格的论文，如Baseline Table / Outcome Table"
+)
+
+st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+
+question = st.text_input("❓ 输入你感兴趣的问题", placeholder="例如：提取临床试验表格中的关键数据")
+
+
+# ========== 工具函数 ==========
+def extract_tables_from_pdf(file):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
+        tmp_file.write(file.getvalue())
         tmp_path = tmp_file.name
-    tables = camelot.read_pdf(tmp_path, flavor='stream', pages='all')
-    print(f"read table num {len(tables)}")
-    # 将所有表格数据转换为文本格式，供LLM使用
-    tables_text = ""
-    for i, table in enumerate(tables):
-        # # 获取表格的DataFrame
-        df = table.df
-        # # fliter text info
-        if(len(df.shape) >= 2 and df.shape[1] > 2):
-            # print(f"table {i} table {df.to_string(index=False, header=True)}")
-            # tables_text += df.to_string(index=False, header=True)
-            tables_text += df.to_markdown(index=False)
-    # print(tables_text)
-    # 调用 LLM 提取答案
-    prompt = f"""
-    {question}，参考以下文献：
-    {tables_text}
-    """
-    print(f"token len {len(prompt)}")
-    # 新的API调用方式
-    resp = client.chat.completions.create(
-        model="hunyuan-turbos-latest",
-        messages=[{"role":"user", "content": prompt}]
-    )
-    st.subheader("📊 答案：")
 
-    st.write(resp.choices[0].message.content)
+    tables = camelot.read_pdf(tmp_path, flavor='stream', pages='all')
+
+    tables_text = ""
+
+    for table in tables:
+        df = table.df
+
+        # 简单过滤垃圾表
+        if df.shape[1] > 2:
+            tables_text += df.to_markdown(index=False) + "\n\n"
+
+    return tables_text
+
+
+def build_prompt(question, tables_text):
+    return f"""
+你是一个医学分析助手。
+
+请根据以下文献表格数据回答问题。
+
+【问题】
+{question}
+
+【表格数据】
+{tables_text}
+
+请输出：
+1. 关键数据总结
+2. 与问题直接相关的结论
+3. 如有必要，指出数据不足
+"""
+
+
+def call_llm(api_key, base_url, model, prompt):
+    if model == 'hunyuan-test':
+        api_key = 'sk-xT4H5qIik5ua5jAFMVwSB06vnGT6RzmXxJK8eFP9EDzw13L2'
+        base_url="https://api.hunyuan.cloud.tencent.com/v1"
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    return resp.choices[0].message.content
+
+
+# ========== 主逻辑 ==========
+if uploaded_file and question:
+    if not api_key:
+        st.warning("⚠️ 请先输入 API Key")
+        st.stop()
+
+    with st.spinner("🔍 正在解析表格 + 调用大模型..."):
+        try:
+            tables_text = extract_tables_from_pdf(uploaded_file)
+
+            if not tables_text.strip():
+                st.error("❌ 未检测到有效表格（可能是扫描PDF）")
+                st.stop()
+
+            prompt = build_prompt(question, tables_text)
+
+            answer = call_llm(api_key, base_url_option, model_option, prompt)
+
+            st.subheader("📊 分析结果")
+            st.write(answer)
+
+            with st.expander("📄 查看提取的表格"):
+                st.markdown(tables_text)
+
+            with st.expander("🧠 Prompt（调试用）"):
+                st.code(prompt)
+
+        except Exception as e:
+            st.error(f"❌ 出错了: {e}")
