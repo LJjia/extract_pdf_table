@@ -1,6 +1,6 @@
 # run
 
-python -m streamlit run .\app2.py
+python -m streamlit run .\app.py
 
 web link
 
