@@ -91,7 +91,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # with st.expander("查看完整Prompt"):
 #     st.code(prompt)
 
-// unuse func
+###### unuse func #####
 def extract_text_from_pdf(file):
     """提取PDF文本内容（非表格部分）"""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -461,7 +461,7 @@ def analyze_pdf_metadata(file):
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-// used func
+####### used func #######
 # ========== 工具函数 ==========
 def extract_tables_from_pdf(file):
     """从单个PDF文件中提取表格"""
