@@ -92,6 +92,154 @@ st.markdown("<br>", unsafe_allow_html=True)
 #     st.code(prompt)
 
 // unuse func
+def extract_text_from_pdf(file):
+    """提取PDF文本内容（非表格部分）"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(file.getvalue())
+        tmp_path = tmp_file.name
+    
+    try:
+        doc = fitz.open(tmp_path)
+        text_content = []
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text()
+            text_content.append({
+                'page': page_num + 1,
+                'content': text
+            })
+        
+        doc.close()
+        return text_content, tmp_path
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+def extract_images_from_pdf(file):
+    """提取PDF中的图片（可用于图表分析）"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(file.getvalue())
+        tmp_path = tmp_file.name
+    
+    try:
+        doc = fitz.open(tmp_path)
+        images = []
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            image_list = page.get_images()
+            
+            for img_index, img in enumerate(image_list):
+                xref = img[0]
+                base_image = doc.extract_image(xref)
+                image_bytes = base_image["image"]
+                
+                images.append({
+                    'page': page_num + 1,
+                    'index': img_index,
+                    'image': Image.open(io.BytesIO(image_bytes))
+                })
+        
+        doc.close()
+        return images
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+def init_session_state():
+    """初始化会话状态"""
+    if 'analysis_history' not in st.session_state:
+        st.session_state.analysis_history = []
+    
+    if 'favorite_analyses' not in st.session_state:
+        st.session_state.favorite_analyses = []
+    
+    if 'current_analysis_id' not in st.session_state:
+        st.session_state.current_analysis_id = None
+
+def save_analysis_record(question, answer, files_info, mode, model):
+    """保存分析记录"""
+    record = {
+        'id': datetime.now().strftime("%Y%m%d_%H%M%S"),
+        'timestamp': datetime.now().isoformat(),
+        'question': question,
+        'answer': answer,
+        'files': [f['name'] for f in files_info],
+        'mode': mode,
+        'model': model,
+        'is_favorite': False
+    }
+    st.session_state.analysis_history.append(record)
+    return record['id']
+
+def export_history_to_json():
+    """导出历史记录为JSON"""
+    if not st.session_state.analysis_history:
+        return None
+    
+    export_data = {
+        'export_date': datetime.now().isoformat(),
+        'total_records': len(st.session_state.analysis_history),
+        'records': st.session_state.analysis_history
+    }
+    
+    return json.dumps(export_data, ensure_ascii=False, indent=2)
+
+def render_history_sidebar():
+    """在侧边栏显示分析历史"""
+    st.sidebar.header("📚 分析历史")
+    
+    if not st.session_state.analysis_history:
+        st.sidebar.info("暂无分析记录")
+        return
+    
+    # 搜索和过滤历史记录
+    search_term = st.sidebar.text_input("🔍 搜索历史记录", key="history_search")
+    
+    filtered_history = st.session_state.analysis_history[::-1]
+    if search_term:
+        filtered_history = [
+            h for h in filtered_history 
+            if search_term.lower() in h['question'].lower() 
+            or search_term.lower() in h['answer'].lower()
+        ]
+    
+    # 显示历史记录数量
+    st.sidebar.markdown(f"**共 {len(filtered_history)} 条记录**")
+    
+    # 导出按钮
+    if st.sidebar.button("📥 导出历史记录"):
+        json_data = export_history_to_json()
+        if json_data:
+            st.sidebar.download_button(
+                "下载JSON文件",
+                json_data,
+                file_name=f"analysis_history_{datetime.now().strftime('%Y%m%d')}.json",
+                mime="application/json"
+            )
+    
+    st.sidebar.markdown("---")
+    
+    # 显示每条历史记录
+    for item in filtered_history[:5]:  # 只显示最近5条
+        with st.sidebar.expander(f"📝 {item['question'][:30]}..."):
+            st.markdown(f"**时间:** {item['timestamp']}")
+            st.markdown(f"**文件:** {', '.join(item['files'])}")
+            st.markdown(f"**模式:** {item['mode']}")
+            st.markdown(f"**模型:** {item['model']}")
+            
+            if st.button(f"⭐ {'取消收藏' if item['is_favorite'] else '收藏'}", key=f"fav_{item['id']}"):
+                item['is_favorite'] = not item['is_favorite']
+                if item['is_favorite']:
+                    st.session_state.favorite_analyses.append(item)
+                else:
+                    st.session_state.favorite_analyses = [
+                        f for f in st.session_state.favorite_analyses 
+                        if f['id'] != item['id']
+                    ]
+                st.rerun()
+
 def compare_model_responses(api_key, base_url, question, tables_data, models_to_test):
     """对比不同模型的回答"""
     results = {}
