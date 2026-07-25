@@ -92,6 +92,328 @@ st.markdown("<br>", unsafe_allow_html=True)
 #     st.code(prompt)
 
 ###### unuse func #####
+class MedicalTableAnalyzer:
+    """医学表格智能分析器"""
+    
+    def __init__(self):
+        self.clinical_patterns = {
+            'baseline': r'(baseline|baseline characteristics|demographic)',
+            'outcome': r'(outcome|endpoint|efficacy|result)',
+            'safety': r'(adverse event|safety|side effect|toxicity)',
+            'survival': r'(survival|kaplan|hazard ratio|overall survival)',
+            'subgroup': r'(subgroup|stratified|subpopulation)'
+        }
+    
+    def classify_table_type(self, table_text):
+        """自动分类表格类型"""
+        table_text_lower = table_text.lower()
+        scores = {}
+        
+        for table_type, pattern in self.clinical_patterns.items():
+            matches = re.findall(pattern, table_text_lower)
+            scores[table_type] = len(matches)
+        
+        if max(scores.values()) == 0:
+            return "unknown"
+        
+        return max(scores, key=scores.get)
+    
+    def extract_statistical_measures(self, table_df):
+        """提取统计指标"""
+        measures = {
+            'p_values': [],
+            'confidence_intervals': [],
+            'odds_ratios': [],
+            'hazard_ratios': [],
+            'mean_values': [],
+            'sd_values': []
+        }
+        
+        # 查找p值
+        p_pattern = r'[pP]\s*[<>=]\s*(\d+\.?\d*)'
+        for col in table_df.columns:
+            for cell in table_df[col].astype(str):
+                matches = re.findall(p_pattern, str(cell))
+                measures['p_values'].extend([float(m) for m in matches])
+        
+        # 查找置信区间
+        ci_pattern = r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)'
+        for col in table_df.columns:
+            for cell in table_df[col].astype(str):
+                matches = re.findall(ci_pattern, str(cell))
+                measures['confidence_intervals'].extend(matches)
+        
+        return measures
+    
+    def check_data_consistency(self, tables_data):
+        """检查表格数据一致性"""
+        consistency_report = {
+            'issues': [],
+            'warnings': [],
+            'suggestions': []
+        }
+        
+        # 检查样本量一致性
+        sample_sizes = []
+        for table_text in tables_data.values():
+            n_pattern = r'[nN]\s*=\s*(\d+)'
+            matches = re.findall(n_pattern, table_text)
+            if matches:
+                sample_sizes.append(int(matches[0]))
+        
+        if len(set(sample_sizes)) > 1:
+            consistency_report['warnings'].append(
+                f"检测到不同的样本量: {set(sample_sizes)}，请检查数据一致性"
+            )
+        
+        # 检查百分比总和
+        percentage_pattern = r'(\d+\.?\d*)\s*%'
+        for table_text in tables_data.values():
+            percentages = re.findall(percentage_pattern, table_text)
+            if percentages:
+                total = sum(float(p) for p in percentages[:10])  # 检查前10个
+                if abs(total - 100) > 5:  # 允许5%的误差
+                    consistency_report['issues'].append(
+                        f"检测到百分比总和异常: {total:.1f}%"
+                    )
+        
+        return consistency_report
+
+class EvidenceQualityAssessor:
+    """循证医学证据质量评估"""
+    
+    def __init__(self):
+        self.evidence_levels = {
+            '1a': '系统评价/Meta分析（同质RCT）',
+            '1b': '单个RCT（可信区间窄）',
+            '1c': '全或无病例系列',
+            '2a': '同质队列研究的系统评价',
+            '2b': '单个队列研究/低质量RCT',
+            '2c': '结局研究/生态学研究',
+            '3a': '同质病例对照研究的系统评价',
+            '3b': '单个病例对照研究',
+            '4': '病例系列/低质量队列和病例对照研究',
+            '5': '专家意见/基础研究'
+        }
+        
+        self.quality_criteria = {
+            'randomization': False,
+            'blinding': False,
+            'allocation_concealment': False,
+            'follow_up_complete': False,
+            'intention_to_treat': False,
+            'sample_size_adequate': False
+        }
+    
+    def assess_study_design(self, text):
+        """评估研究设计类型"""
+        design_patterns = {
+            'systematic_review': r'(systematic review|meta.analysis|荟萃分析|系统评价)',
+            'rct': r'(randomized|RCT|随机对照|randomly assigned)',
+            'cohort': r'(cohort|队列|prospective|前瞻性)',
+            'case_control': r'(case.control|病例对照|retrospective|回顾性)',
+            'cross_sectional': r'(cross.sectional|横断面)',
+            'case_series': r'(case series|病例系列|case report|病例报告)'
+        }
+        
+        scores = {}
+        text_lower = text.lower()
+        
+        for design, pattern in design_patterns.items():
+            matches = re.findall(pattern, text_lower)
+            scores[design] = len(matches)
+        
+        if max(scores.values()) == 0:
+            return 'unknown'
+        
+        return max(scores, key=scores.get)
+    
+    def calculate_quality_score(self, text, study_design):
+        """计算研究质量评分"""
+        score = 0
+        max_score = 100
+        
+        # 研究设计基础分
+        design_scores = {
+            'systematic_review': 80,
+            'rct': 70,
+            'cohort': 50,
+            'case_control': 30,
+            'cross_sectional': 20,
+            'case_series': 10
+        }
+        
+        score = design_scores.get(study_design, 0)
+        
+        # 质量指标加分
+        if re.search(r'(randomization|随机分组)', text, re.IGNORECASE):
+            score += 10
+        if re.search(r'(double.blind|双盲|blinding)', text, re.IGNORECASE):
+            score += 5
+        if re.search(r'(allocation concealment|分配隐藏)', text, re.IGNORECASE):
+            score += 5
+        if re.search(r'(intention.to.treat|ITT|意向性分析)', text, re.IGNORECASE):
+            score += 5
+        if re.search(r'(sample size calculation|样本量计算|power)', text, re.IGNORECASE):
+            score += 5
+        
+        # 确保不超过最大值
+        score = min(score, max_score)
+        
+        return score
+    
+    def get_recommendation_grade(self, quality_score):
+        """根据质量评分给出推荐等级"""
+        if quality_score >= 80:
+            return 'A', '强烈推荐（高质量证据）'
+        elif quality_score >= 60:
+            return 'B', '推荐（中等质量证据）'
+        elif quality_score >= 40:
+            return 'C', '可以考虑（低质量证据）'
+        else:
+            return 'D', '不推荐（极低质量证据）'
+
+class MedicalDataVisualizer:
+    """医学数据可视化"""
+    
+    def create_forest_plot(self, data_dict):
+        """创建森林图"""
+        studies = data_dict.get('studies', [])
+        or_values = data_dict.get('or_values', [])
+        ci_lower = data_dict.get('ci_lower', [])
+        ci_upper = data_dict.get('ci_upper', [])
+        
+        fig = go.Figure()
+        
+        # 添加效应量和置信区间
+        fig.add_trace(go.Scatter(
+            x=or_values,
+            y=studies,
+            mode='markers',
+            marker=dict(size=12, color='blue'),
+            name='OR/HR',
+            error_x=dict(
+                type='data',
+                symmetric=False,
+                array=[u - o for u, o in zip(ci_upper, or_values)],
+                arrayminus=[o - l for o, l in zip(or_values, ci_lower)]
+            )
+        ))
+        
+        # 添加无效线
+        fig.add_vline(x=1, line_dash="dash", line_color="red", annotation_text="无效线")
+        
+        fig.update_layout(
+            title="森林图 (Forest Plot)",
+            xaxis_title="效应量 (OR/HR)",
+            yaxis_title="研究",
+            height=400,
+            showlegend=False
+        )
+        
+        return fig
+    
+    def create_survival_curve(self, time_points, survival_probs, groups):
+        """创建生存曲线"""
+        fig = go.Figure()
+        
+        for group, probs in zip(groups, survival_probs):
+            fig.add_trace(go.Scatter(
+                x=time_points,
+                y=probs,
+                mode='lines+markers',
+                name=group,
+                line=dict(width=2)
+            ))
+        
+        fig.update_layout(
+            title="生存曲线 (Kaplan-Meier)",
+            xaxis_title="时间 (月)",
+            yaxis_title="生存率",
+            yaxis_range=[0, 1],
+            height=400
+        )
+        
+        return fig
+    
+    def create_risk_of_bias_chart(self, bias_data):
+        """创建偏倚风险图"""
+        domains = list(bias_data.keys())
+        judgments = list(bias_data.values())
+        
+        # 创建交通灯图
+        colors = {
+            'low': 'green',
+            'unclear': 'yellow',
+            'high': 'red'
+        }
+        
+        fig = go.Figure()
+        
+        for i, (domain, judgment) in enumerate(zip(domains, judgments)):
+            fig.add_trace(go.Bar(
+                x=[1],
+                y=[domain],
+                orientation='h',
+                marker_color=colors.get(judgment, 'gray'),
+                name=domain,
+                text=judgment.upper(),
+                textposition='inside'
+            ))
+        
+        fig.update_layout(
+            title="偏倚风险评估 (Risk of Bias)",
+            xaxis_visible=False,
+            height=300,
+            showlegend=False
+        )
+        
+        return fig
+    
+    def create_network_meta_plot(self, treatments, comparisons):
+        """创建网状Meta分析图"""
+        # 创建节点位置（圆形布局）
+        n = len(treatments)
+        angles = np.linspace(0, 2*np.pi, n, endpoint=False)
+        x = np.cos(angles)
+        y = np.sin(angles)
+        
+        fig = go.Figure()
+        
+        # 添加节点
+        for i, (treatment, xi, yi) in enumerate(zip(treatments, x, y)):
+            fig.add_trace(go.Scatter(
+                x=[xi],
+                y=[yi],
+                mode='markers+text',
+                marker=dict(size=20 + comparisons[i]*5, color='lightblue'),
+                text=treatment,
+                textposition='top center',
+                name=treatment
+            ))
+        
+        # 添加连接线
+        for i in range(n):
+            for j in range(i+1, n):
+                if comparisons[i] > 0 and comparisons[j] > 0:
+                    fig.add_trace(go.Scatter(
+                        x=[x[i], x[j]],
+                        y=[y[i], y[j]],
+                        mode='lines',
+                        line=dict(width=min(comparisons[i], comparisons[j]), color='gray'),
+                        showlegend=False
+                    ))
+        
+        fig.update_layout(
+            title="网状Meta分析图 (Network Meta-Analysis)",
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            height=500
+        )
+        
+        return fig
+
+
 def extract_text_from_pdf(file):
     """提取PDF文本内容（非表格部分）"""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
