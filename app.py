@@ -185,7 +185,7 @@ def call_llm(api_key, base_url, model, prompt):
     
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    print("调用大模型...")
+    logger.info("调用大模型...")
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -233,12 +233,12 @@ if uploaded_files and question:
                 st.stop()
             
             st.success(f"✅ 成功从 {len(valid_files)} 个文件中提取到表格（共约 {total_tables} 个表格）")
-            
+
             if analysis_mode == "合并分析所有文件":
                 # 合并分析模式
                 with st.spinner("🧠 正在调用大模型进行综合分析..."):
                     prompt = build_prompt_for_multiple(question, valid_files)
-                    print(f"==============prompt is=========== \n\n\n\n {prompt}")
+                    logger.info(f"==============prompt is=========== \n\n\n\n {prompt}")
                     answer = call_llm(api_key, base_url_option, model_option, prompt)
                     
                     st.subheader("📊 综合分析结果")
@@ -265,9 +265,27 @@ if uploaded_files and question:
                             answer = call_llm(api_key, base_url_option, model_option, prompt)
                             
                             st.write(answer)
-                            
-                            with st.expander(f"📄 查看 {filename} 的原始表格"):
-                                st.markdown(tables_text)
+        if "history" not in st.session_state:
+            st.session_state.history = []
+        st.session_state.history.append({
+            "question": question,
+            "answer": answer
+        })
+
+        st.sidebar.subheader("历史记录")
+        for item in st.session_state.history[::-1]:
+        with st.sidebar.expander(item["question"]):
+            st.write(item["answer"])
+
+        with st.expander(f"📄 查看 {filename} 的原始表格"):
+                st.markdown(tables_text)
+            st.download_button(
+                "下载分析结果",
+                answer,
+                file_name="analysis.md",
+                mime="text/markdown"
+            )
+            
             
         except Exception as e:
             st.error(f"❌ 出错了: {e}")
