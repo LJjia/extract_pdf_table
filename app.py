@@ -3,13 +3,25 @@ import tempfile
 import camelot
 from openai import OpenAI
 import os
+import logging
+
+logging.basicConfig(
+
+    filename="app.log",
+
+    level=logging.INFO,
+
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
+logger = logging.getLogger(__name__)
 
 # ========== 页面配置 ==========
-st.set_page_config(page_title="循证医学智能体 V2", layout="wide")
+st.set_page_config(page_title="循证医学智能体平台 V2", layout="wide")
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 st.markdown(
-    "<h1 style='text-align: center;'>循证医学智能体 V2</h1>",
+    "<h1 style='text-align: center;'>循证医学智能体平台 V2</h1>",
     unsafe_allow_html=True
 )
 
@@ -71,6 +83,12 @@ analysis_mode = st.radio(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+show_prompt = st.checkbox("显示Prompt")
+if show_prompt:
+    st.subheader("Prompt预览")
+    st.code(prompt, language="text")
+with st.expander("查看完整Prompt"):
+    st.code(prompt)
 
 # ========== 工具函数 ==========
 def extract_tables_from_pdf(file):
@@ -175,6 +193,30 @@ def call_llm(api_key, base_url, model, prompt):
     )
     
     return resp.choices[0].message.content
+
+def pdf_statistics(file):
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+
+        tmp.write(file.getvalue())
+
+        path = tmp.name
+
+    doc = fitz.open(path)
+
+    stats = {
+        "pages": len(doc),
+        "title": doc.metadata.get("title"),
+        "author": doc.metadata.get("author"),
+        "producer": doc.metadata.get("producer")
+    }
+
+    doc.close()
+
+    os.remove(path)
+
+    return stats
+
 
 # ========== 主逻辑 ==========
 if uploaded_files and question:
