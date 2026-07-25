@@ -83,12 +83,12 @@ analysis_mode = st.radio(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-show_prompt = st.checkbox("显示Prompt")
-if show_prompt:
-    st.subheader("Prompt预览")
-    st.code(prompt, language="text")
-with st.expander("查看完整Prompt"):
-    st.code(prompt)
+# show_prompt = st.checkbox("显示Prompt")
+# if show_prompt:
+#     st.subheader("Prompt预览")
+#     st.code(prompt, language="text")
+# with st.expander("查看完整Prompt"):
+#     st.code(prompt)
 
 # ========== 工具函数 ==========
 def extract_tables_from_pdf(file):
