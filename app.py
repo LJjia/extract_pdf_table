@@ -274,8 +274,8 @@ if uploaded_files and question:
     
             st.sidebar.subheader("历史记录")
             for item in st.session_state.history[::-1]:
-            with st.sidebar.expander(item["question"]):
-                st.write(item["answer"])
+                with st.sidebar.expander(item["question"]):
+                    st.write(item["answer"])
     
             with st.expander(f"📄 查看 {filename} 的原始表格"):
                     st.markdown(tables_text)
