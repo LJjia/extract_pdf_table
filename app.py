@@ -263,28 +263,28 @@ if uploaded_files and question:
                         with st.spinner(f"正在分析 {filename}..."):
                             prompt = build_prompt_for_single(question, tables_text, filename)
                             answer = call_llm(api_key, base_url_option, model_option, prompt)
-                            
                             st.write(answer)
-        if "history" not in st.session_state:
-            st.session_state.history = []
-        st.session_state.history.append({
-            "question": question,
-            "answer": answer
-        })
 
-        st.sidebar.subheader("历史记录")
-        for item in st.session_state.history[::-1]:
-        with st.sidebar.expander(item["question"]):
-            st.write(item["answer"])
-
-        with st.expander(f"📄 查看 {filename} 的原始表格"):
-                st.markdown(tables_text)
-            st.download_button(
-                "下载分析结果",
-                answer,
-                file_name="analysis.md",
-                mime="text/markdown"
-            )
+            if "history" not in st.session_state:
+                st.session_state.history = []
+            st.session_state.history.append({
+                "question": question,
+                "answer": answer
+            })
+    
+            st.sidebar.subheader("历史记录")
+            for item in st.session_state.history[::-1]:
+            with st.sidebar.expander(item["question"]):
+                st.write(item["answer"])
+    
+            with st.expander(f"📄 查看 {filename} 的原始表格"):
+                    st.markdown(tables_text)
+                st.download_button(
+                    "下载分析结果",
+                    answer,
+                    file_name="analysis.md",
+                    mime="text/markdown"
+                )
             
             
         except Exception as e:
